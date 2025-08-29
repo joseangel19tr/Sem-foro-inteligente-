@@ -4,16 +4,15 @@ import threading
 import time
 from PIL import Image, ImageTk
 
-# Configura tu puerto serial aquí
-SERIAL_PORT = "COM6"  # Cambia esto si tu ESP32 está en otro puerto
+
+SERIAL_PORT = "COM6"  
 BAUDRATE = 9600
 
 class SemaforoApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Control de Semáforo")
+        self.root.title("Control de Semáforo Serial")
 
-        # Intentar conectar al ESP32
         try:
             self.ser = serial.Serial(SERIAL_PORT, BAUDRATE, timeout=1)
             time.sleep(2)
@@ -21,88 +20,97 @@ class SemaforoApp:
             self.ser = None
             print(f"No se pudo conectar al ESP32: {e}")
 
-        # Etiqueta de estado
+        
+        self.estado_verde = 0
+        self.estado_amarillo = 0
+        self.estado_rojo = 0
+        self.rutina_activa = False
+
         self.estado = tk.Label(root, text="Estado: Apagado", font=("Arial", 14))
         self.estado.pack(pady=10)
 
-        # Canvas para mostrar la imagen del semáforo
         self.canvas = tk.Canvas(root, width=200, height=400)
         self.canvas.pack(pady=10)
 
-        # Cargar imágenes del semáforo
-         # Reemplaza las rutas con la ubicación correcta de las imágenes en la carpeta 'img'
-        self.img_verde = ImageTk.PhotoImage(Image.open(r"C:\Users\josea\OneDrive\Documentos\Tareas Uni\arquitectura soft\imgenes semaforo\semaforo verde.png").resize((200, 400)))
-        self.img_amarillo = ImageTk.PhotoImage(Image.open(r"C:\Users\josea\OneDrive\Documentos\Tareas Uni\arquitectura soft\imgenes semaforo\semaforo amarillo.png").resize((200, 400)))
-        self.img_rojo = ImageTk.PhotoImage(Image.open(r"C:\Users\josea\OneDrive\Documentos\Tareas Uni\arquitectura soft\imgenes semaforo\semaforo rojo.png").resize((200, 400)))
-        self.img_apagado = ImageTk.PhotoImage(Image.open(r"C:\Users\josea\OneDrive\Documentos\Tareas Uni\arquitectura soft\imgenes semaforo\semaforo apagado.png").resize((200, 400)))
-        # Mostrar imagen apagada al inicio
+        # Imagenes
+        self.img_verde = ImageTk.PhotoImage(Image.open(r"C:\Users\josea\OneDrive\Documentos\Tareas Uni\arquitectura soft\imagen de semáforo v.png").resize((200, 400)))
+        self.img_amarillo = ImageTk.PhotoImage(Image.open(r"C:\Users\josea\OneDrive\Documentos\Tareas Uni\arquitectura soft\imagen de semáforo am.png").resize((200, 400)))
+        self.img_rojo = ImageTk.PhotoImage(Image.open(r"C:\Users\josea\OneDrive\Documentos\Tareas Uni\arquitectura soft\imagen de semáforo r.png").resize((200, 400)))
+        self.img_apagado = ImageTk.PhotoImage(Image.open(r"C:\Users\josea\OneDrive\Documentos\Tareas Uni\arquitectura soft\imagen de semáforo a.png").resize((200, 400)))
+
         self.semaforo_img = self.canvas.create_image(100, 200, image=self.img_apagado)
 
-        # Botones de control manual
+        # Botones
         frame_botones = tk.Frame(root)
         frame_botones.pack(pady=5)
 
-        tk.Button(frame_botones, text="Encender Verde", bg="green", fg="white",
-                  command=lambda: self.encender("verde")).grid(row=0, column=0, padx=5)
-        tk.Button(frame_botones, text="Encender Amarillo", bg="yellow",
-                  command=lambda: self.encender("amarillo")).grid(row=0, column=1, padx=5)
-        tk.Button(frame_botones, text="Encender Rojo", bg="red", fg="white",
-                  command=lambda: self.encender("rojo")).grid(row=0, column=2, padx=5)
-        tk.Button(frame_botones, text="Apagar Todo", bg="gray", fg="white",
-                  command=self.apagar).grid(row=1, column=0, columnspan=3, pady=5)
+        tk.Button(frame_botones, text="Verde", bg="green", fg="white",
+                  command=self.toggle_verde).grid(row=0, column=0, padx=5)
+        tk.Button(frame_botones, text="Amarillo", bg="yellow",
+                  command=self.toggle_amarillo).grid(row=0, column=1, padx=5)
+        tk.Button(frame_botones, text="Rojo", bg="red", fg="white",
+                  command=self.toggle_rojo).grid(row=0, column=2, padx=5)
 
-        # Sliders de tiempo
-        frame_sliders = tk.Frame(root)
-        frame_sliders.pack(pady=10)
+        tk.Button(frame_botones, text="Apagar Todo", bg="gray", fg="white",
+                  command=self.apagar_todo).grid(row=1, column=0, columnspan=3, pady=5)
+
+        frame_rutina = tk.Frame(root)
+        frame_rutina.pack(pady=10)
 
         self.tiempo_verde = tk.IntVar(value=5)
         self.tiempo_amarillo = tk.IntVar(value=2)
         self.tiempo_rojo = tk.IntVar(value=5)
 
-        tk.Label(frame_sliders, text="Tiempo Verde (s)").grid(row=0, column=0)
-        tk.Scale(frame_sliders, from_=1, to=20, orient="horizontal",
-                 variable=self.tiempo_verde).grid(row=1, column=0)
+        tk.Label(frame_rutina, text="Verde (s)").grid(row=0, column=0)
+        tk.Scale(frame_rutina, from_=1, to=20, orient="horizontal", variable=self.tiempo_verde).grid(row=1, column=0)
 
-        tk.Label(frame_sliders, text="Tiempo Amarillo (s)").grid(row=0, column=1)
-        tk.Scale(frame_sliders, from_=1, to=10, orient="horizontal",
-                 variable=self.tiempo_amarillo).grid(row=1, column=1)
+        tk.Label(frame_rutina, text="Amarillo (s)").grid(row=0, column=1)
+        tk.Scale(frame_rutina, from_=1, to=10, orient="horizontal", variable=self.tiempo_amarillo).grid(row=1, column=1)
 
-        tk.Label(frame_sliders, text="Tiempo Rojo (s)").grid(row=0, column=2)
-        tk.Scale(frame_sliders, from_=1, to=20, orient="horizontal",
-                 variable=self.tiempo_rojo).grid(row=1, column=2)
-
-        # Botones de rutina automática
-        frame_rutina = tk.Frame(root)
-        frame_rutina.pack(pady=10)
+        tk.Label(frame_rutina, text="Rojo (s)").grid(row=0, column=2)
+        tk.Scale(frame_rutina, from_=1, to=20, orient="horizontal", variable=self.tiempo_rojo).grid(row=1, column=2)
 
         tk.Button(frame_rutina, text="Iniciar Rutina", bg="blue", fg="white",
-                  command=self.iniciar_rutina).grid(row=0, column=0, padx=10)
+                  command=self.iniciar_rutina).grid(row=2, column=0, columnspan=2, pady=5)
         tk.Button(frame_rutina, text="Detener Rutina", bg="black", fg="white",
-                  command=self.detener_rutina).grid(row=0, column=1, padx=10)
+                  command=self.detener_rutina).grid(row=2, column=2, pady=5)
 
-        self.rutina_activa = False
+    def toggle_verde(self):
+        self.estado_verde = 1 if self.estado_verde == 0 else 0
+        self.actualizar_semaforo()
 
-    def encender(self, color):
-        self.apagar()  # Apaga todo antes de encender
-        self.estado.config(text=f"Estado: {color.upper()} encendido")
+    def toggle_amarillo(self):
+        self.estado_amarillo = 1 if self.estado_amarillo == 0 else 0
+        self.actualizar_semaforo()
 
-        # Cambiar la imagen del semáforo
-        if color == "verde":
+    def toggle_rojo(self):
+        self.estado_rojo = 1 if self.estado_rojo == 0 else 0
+        self.actualizar_semaforo()
+
+    def apagar_todo(self):
+        self.estado_verde = 0
+        self.estado_amarillo = 0
+        self.estado_rojo = 0
+        self.actualizar_semaforo()
+
+    def actualizar_semaforo(self):
+        self.estado.config(text=f"Estado: V:{self.estado_verde} A:{self.estado_amarillo} R:{self.estado_rojo}")
+        if self.ser:
+            self.ser.write(f"verde:{self.estado_verde}\n".encode())
+            self.ser.write(f"amarillo:{self.estado_amarillo}\n".encode())
+            self.ser.write(f"rojo:{self.estado_rojo}\n".encode())
+
+        if self.estado_verde and not self.estado_amarillo and not self.estado_rojo:
             self.canvas.itemconfig(self.semaforo_img, image=self.img_verde)
-        elif color == "amarillo":
+        elif self.estado_amarillo and not self.estado_verde and not self.estado_rojo:
             self.canvas.itemconfig(self.semaforo_img, image=self.img_amarillo)
-        elif color == "rojo":
+        elif self.estado_rojo and not self.estado_verde and not self.estado_amarillo:
             self.canvas.itemconfig(self.semaforo_img, image=self.img_rojo)
+        elif self.estado_verde and self.estado_amarillo and self.estado_rojo:
+            self.canvas.itemconfig(self.semaforo_img, image=self.img_rojo) 
+        else:
+            self.canvas.itemconfig(self.semaforo_img, image=self.img_apagado)
 
-        if self.ser:
-            self.ser.write(f"{color}:1\n".encode())
-
-    def apagar(self):
-        self.estado.config(text="Estado: Apagado")
-        self.canvas.itemconfig(self.semaforo_img, image=self.img_apagado)
-        if self.ser:
-            for color in ["rojo", "amarillo", "verde"]:
-                self.ser.write(f"{color}:0\n".encode())
 
     def iniciar_rutina(self):
         if not self.rutina_activa:
@@ -111,24 +119,37 @@ class SemaforoApp:
 
     def detener_rutina(self):
         self.rutina_activa = False
-        self.estado.config(text="Estado: Rutina detenida")
-        self.apagar()
+        self.apagar_todo()
 
     def ejecutar_rutina(self):
         while self.rutina_activa:
-            self.encender("verde")
-            time.sleep(self.tiempo_verde.get())
+            self.estado_verde = 1
+            self.estado_amarillo = 0
+            self.estado_rojo = 0
+            self.actualizar_semaforo()
+            time.sleep(self.tiempo_verde.get() - 1)
 
-            self.encender("amarillo")
+            for _ in range(3):
+                self.estado_verde = 0
+                self.actualizar_semaforo()
+                time.sleep(0.5)
+                self.estado_verde = 1
+                self.actualizar_semaforo()
+                time.sleep(0.5)
+
+            self.estado_verde = 0
+            self.estado_amarillo = 1
+            self.actualizar_semaforo()
             time.sleep(self.tiempo_amarillo.get())
 
-            self.encender("rojo")
+            self.estado_amarillo = 0
+            self.estado_rojo = 1
+            self.actualizar_semaforo()
             time.sleep(self.tiempo_rojo.get())
 
-            self.apagar()
+            self.apagar_todo()
             time.sleep(1)
 
-# Ejecutar la interfaz
 if __name__ == "__main__":
     root = tk.Tk()
     app = SemaforoApp(root)
