@@ -1,2 +1,2 @@
-# Sem-foro-inteligente-
+# Semaforo-inteligente-
 Practica 1 semáforo inteligente 
